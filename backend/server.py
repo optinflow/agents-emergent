@@ -5,6 +5,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import asyncio
+import httpx
 import psutil
 import shutil
 from pathlib import Path
@@ -51,12 +52,25 @@ async def root():
     return {"message": "Personal AI Computer Dashboard API"}
 
 
+async def check_desktop_network_reachable():
+    if not DESKTOP_URL:
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as http_client:
+            resp = await http_client.get(DESKTOP_URL)
+            return resp.status_code < 500
+    except Exception:
+        return False
+
+
 @api_router.get("/system/status")
 async def system_status():
     desktop = docker_manager.get_desktop_status(DESKTOP_CONTAINER_NAME)
+    network_reachable = await check_desktop_network_reachable()
     return {
         "docker_available": docker_manager.is_available(),
         "desktop": desktop,
+        "desktop_network_reachable": network_reachable,
         "container_name": DESKTOP_CONTAINER_NAME,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
@@ -118,7 +132,8 @@ async def desktop_restart():
 
 @api_router.get("/desktop/open")
 async def desktop_open():
-    return {"available": docker_manager.is_available() and bool(DESKTOP_URL), "url": DESKTOP_URL}
+    reachable = await check_desktop_network_reachable()
+    return {"available": reachable, "url": DESKTOP_URL}
 
 
 @app.websocket("/api/desktop/terminal/ws")

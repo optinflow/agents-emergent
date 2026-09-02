@@ -7,6 +7,8 @@ export const StatusCard = ({ status, onRefresh, onOpenDesktop, onOpenTerminal })
   const [loadingAction, setLoadingAction] = useState(null);
   const desktop = status?.desktop || {};
   const dockerAvailable = status?.docker_available;
+  const networkReachable = status?.desktop_network_reachable;
+  const isOnline = dockerAvailable ? desktop.status === "running" : networkReachable;
 
   const runAction = async (action, endpoint) => {
     setLoadingAction(action);
@@ -21,7 +23,13 @@ export const StatusCard = ({ status, onRefresh, onOpenDesktop, onOpenTerminal })
     }
   };
 
-  const statusLabel = !dockerAvailable ? "UNAVAILABLE" : (desktop.status || "unknown").toUpperCase();
+  const statusLabel = isOnline
+    ? dockerAvailable
+      ? (desktop.status || "unknown").toUpperCase()
+      : "ONLINE (NETWORK)"
+    : !dockerAvailable
+    ? "UNAVAILABLE"
+    : (desktop.status || "unknown").toUpperCase();
 
   return (
     <Panel title="Desktop Container" testId="container-status-panel">
@@ -29,7 +37,7 @@ export const StatusCard = ({ status, onRefresh, onOpenDesktop, onOpenTerminal })
         <span
           data-testid="system-status-badge"
           className={`px-4 py-2 border font-mono text-xs uppercase tracking-widest ${
-            desktop.status === "running" ? "border-white text-white" : "border-white/30 text-neutral-500"
+            isOnline ? "border-white text-white" : "border-white/30 text-neutral-500"
           }`}
         >
           {statusLabel}
@@ -80,8 +88,9 @@ export const StatusCard = ({ status, onRefresh, onOpenDesktop, onOpenTerminal })
       </div>
       {!dockerAvailable && (
         <p data-testid="docker-unavailable-note" className="mt-5 text-xs font-mono text-neutral-500 leading-relaxed">
-          Docker daemon not detected in this environment. Deploy this stack (see README) on a Docker host to
-          control a real desktop container.
+          {networkReachable
+            ? "Docker control (Start/Stop/Restart/Terminal) is unavailable on this host, but the desktop is reachable over the network — Open Desktop works."
+            : "Docker daemon not detected in this environment. Deploy this stack (see README) on a Docker host to control a real desktop container."}
         </p>
       )}
     </Panel>
