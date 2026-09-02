@@ -55,7 +55,14 @@ export const GitHubPanel = () => {
             {status?.clean ? "Clean" : `${status?.changes?.length || 0} change(s)`}
           </span>
         </div>
-        {!status?.configured && (
+        {status?.git_repo_found === false && (
+          <div className="text-neutral-500 text-xs">
+            No git history on this host - this backend was deployed as a standalone image (e.g. Railway) without
+            the full repo. Railway's own GitHub integration already auto-deploys on push, so this panel isn't
+            needed here; it's for running the full stack yourself via docker-compose.
+          </div>
+        )}
+        {status?.git_repo_found !== false && !status?.configured && (
           <div className="text-neutral-500 text-xs">
             Set GITHUB_TOKEN and GITHUB_REPO_URL in backend/.env to enable Push/Pull/Sync.
           </div>

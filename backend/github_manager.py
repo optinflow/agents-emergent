@@ -43,7 +43,19 @@ class GitHubManager:
             raise RuntimeError(proc.stderr.strip()[:500] or f"git {' '.join(args)} failed")
         return proc.stdout.strip()
 
+    def is_git_repo(self):
+        return (self.repo_dir / ".git").exists()
+
     def status(self):
+        if not self.is_git_repo():
+            return {
+                "branch": None,
+                "clean": True,
+                "changes": [],
+                "remote_url": "",
+                "configured": self.is_configured(),
+                "git_repo_found": False,
+            }
         branch = self._run("branch", "--show-current")
         porcelain = self._run("status", "--porcelain")
         try:
@@ -56,6 +68,7 @@ class GitHubManager:
             "changes": [l for l in porcelain.splitlines() if l],
             "remote_url": remote_url,
             "configured": self.is_configured(),
+            "git_repo_found": True,
         }
 
     def commits(self, limit=10):
@@ -80,6 +93,8 @@ class GitHubManager:
     def push(self, commit_message=None):
         if not self.is_configured():
             raise RuntimeError("GitHub not configured: set GITHUB_TOKEN and GITHUB_REPO_URL in backend/.env")
+        if not self.is_git_repo():
+            raise RuntimeError("No .git directory found on this host - this deployment has no git history to push")
         porcelain = self._run("status", "--porcelain")
         if porcelain:
             self._run("add", "-A")
@@ -90,6 +105,8 @@ class GitHubManager:
     def pull(self):
         if not self.is_configured():
             raise RuntimeError("GitHub not configured: set GITHUB_TOKEN and GITHUB_REPO_URL in backend/.env")
+        if not self.is_git_repo():
+            raise RuntimeError("No .git directory found on this host - this deployment has no git history to pull into")
         self._ensure_remote()
         return self._run("pull", "--rebase", "origin", self.branch)
 

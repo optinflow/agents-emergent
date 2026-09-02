@@ -63,6 +63,30 @@ async def check_desktop_network_reachable():
         return False
 
 
+def get_container_memory():
+    """Prefer the cgroup memory limit/usage (accurate inside a container) over
+    psutil.virtual_memory(), which reports the shared host's totals on
+    platforms like Railway where many containers share one physical node."""
+    host_mem = psutil.virtual_memory()
+    for current_path, limit_path in [
+        ("/sys/fs/cgroup/memory.current", "/sys/fs/cgroup/memory.max"),
+        ("/sys/fs/cgroup/memory/memory.usage_in_bytes", "/sys/fs/cgroup/memory/memory.limit_in_bytes"),
+    ]:
+        try:
+            with open(current_path) as f:
+                used = int(f.read().strip())
+            with open(limit_path) as f:
+                raw_limit = f.read().strip()
+            if raw_limit == "max":
+                continue
+            limit = int(raw_limit)
+            if 0 < limit < host_mem.total:
+                return used, limit
+        except (FileNotFoundError, ValueError, PermissionError):
+            continue
+    return host_mem.used, host_mem.total
+
+
 @api_router.get("/system/status")
 async def system_status():
     desktop = docker_manager.get_desktop_status(DESKTOP_CONTAINER_NAME)
@@ -80,7 +104,7 @@ async def system_status():
 async def system_stats():
     desktop_stats = docker_manager.get_stats(DESKTOP_CONTAINER_NAME) if docker_manager.is_available() else None
     host_cpu = psutil.cpu_percent(interval=0.3)
-    host_mem = psutil.virtual_memory()
+    mem_used, mem_total = get_container_memory()
     disk_path = DATA_DIR if Path(DATA_DIR).exists() else "/"
     host_disk = shutil.disk_usage(disk_path)
     return {
@@ -88,9 +112,9 @@ async def system_stats():
         "desktop_stats": desktop_stats,
         "host_stats": {
             "cpu_percent": host_cpu,
-            "mem_percent": host_mem.percent,
-            "mem_used": host_mem.used,
-            "mem_total": host_mem.total,
+            "mem_percent": round((mem_used / mem_total) * 100, 1) if mem_total else 0.0,
+            "mem_used": mem_used,
+            "mem_total": mem_total,
             "disk_percent": round((host_disk.used / host_disk.total) * 100, 1),
             "disk_used": host_disk.used,
             "disk_total": host_disk.total,
