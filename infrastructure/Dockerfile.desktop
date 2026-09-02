@@ -11,3 +11,7 @@ RUN apt-get update && \
 # euid, which makes Xorg/KasmVNC fail with "_XSERVTransmkdir: euid != 0" if it
 # has to create /tmp/.X11-unix itself at runtime.
 RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+
+# LinuxServer's supported custom-init hook - fixes the panel clock overlap.
+COPY config/desktop/custom-cont-init.d/. /custom-cont-init.d/
+RUN chmod +x /custom-cont-init.d/*.sh
