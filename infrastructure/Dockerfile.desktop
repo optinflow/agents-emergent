@@ -5,3 +5,9 @@ LABEL description="Portable Personal AI Computer - Ubuntu XFCE desktop (KasmVNC)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git curl ca-certificates openssh-client && \
     rm -rf /var/lib/apt/lists/*
+
+# Pre-create the X11 socket directory with the correct permissions at build time
+# (as root). Some hosts (e.g. Railway) run the container's init as a non-root
+# euid, which makes Xorg/KasmVNC fail with "_XSERVTransmkdir: euid != 0" if it
+# has to create /tmp/.X11-unix itself at runtime.
+RUN mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
