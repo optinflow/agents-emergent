@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 2 focused on the new desktop_network_reachable decoupling fix. Updated /app/backend/tests/backend_test.py: (a) added assertion that /api/system/status now returns desktop_network_reachable=false when DESKTOP_URL is unset, (b) flipped GitHub tests to reflect that GITHUB_TOKEN + GITHUB_REPO_URL are now really configured (configured=True, push/pull/sync return 200 with clean tree, 400 tolerated). All 19 backend pytest tests pass in default sandbox state (DESKTOP_URL empty). Then simulated a reachable desktop by temporarily setting DESKTOP_URL=https://httpbin.org/status/200 in backend/.env, restarted backend, and verified end-to-end: (1) GET /api/system/status returned docker_available=false + desktop_network_reachable=true, (2) GET /api/desktop/open returned available=true with the correct url, (3) StatusCard badge rendered 'ONLINE (NETWORK)' in white/active styling, (4) footer note switched to the 'Docker control unavailable but desktop reachable — Open Desktop works' variant, (5) Open Desktop modal rendered a real iframe with src=https://httpbin.org/status/200 (not the 'unavailable' fallback), (6) Start button still correctly triggered a 503 'Docker daemon not available' toast — Docker-socket-dependent actions were NOT regressed, (7) Open Terminal modal opens/closes cleanly. Finally reverted DESKTOP_URL back to \"\" in backend/.env, restarted backend, and re-verified: badge back to 'UNAVAILABLE', footer back to the 'Docker daemon not detected' variant, Open Desktop modal shows the unavailable fallback, and all 19 pytest tests still pass. Regression spot-checks: telemetry gauges render real host values (CPU 14%, RAM 64%, DISK 18%), GitHub panel shows real branch=main, real remote https://github.com/optinflow/agents-emergent.git, real commit list (70c29fc, d4709d9 ...), Snapshot manager panel present. App left in its correct default honest-unavailable state.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "check_desktop_network_reachable() opens a new httpx.AsyncClient per request; fine at low QPS but a module-level shared AsyncClient would be more efficient if /api/system/status is polled aggressively from the UI.",
+    "GET /api/desktop/open triggers a live outbound HTTP call every poll. If UI polls this on an interval, add a short in-memory TTL cache (e.g. 2s) to avoid amplifying load and cutting request tail latency.",
+    "docker_manager.get_stats still runs synchronously inside async /api/system/stats (carry-over from iter1) — only matters when docker is actually available."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/.env (temporarily set DESKTOP_URL for simulation, then restored to empty string as required)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None persistent. Backup CRUD test data is created and deleted within TestBackups.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "backend/.env DESKTOP_URL is intentionally empty (correct default for this sandbox). To re-simulate a reachable desktop set DESKTOP_URL to any public 2xx URL and restart backend, then restore to empty. StatusCard.jsx isOnline logic: dockerAvailable ? desktop.status==='running' : networkReachable. Badge texts: 'ONLINE (NETWORK)' | 'UNAVAILABLE' | <docker desktop status upper>. 19 pytest cases in /app/backend/tests/backend_test.py cover system, desktop 503s, github (now configured), and backup CRUD.",
+  "rca of the issue": "Original user bug: Railway multi-service deployment showed desktop as UNAVAILABLE because docker.from_env() from the backend service can never see a sibling desktop service's container (no shared docker socket). Fix decouples reachability from docker socket by adding check_desktop_network_reachable() (httpx GET on DESKTOP_URL with 3s timeout). /api/system/status now exposes desktop_network_reachable independently, /api/desktop/open available flag is now driven purely by network reachability, and StatusCard renders 'ONLINE (NETWORK)' + a docker-limited-but-reachable footer note in that case. Validated by simulating a reachable URL and verifying badge/footer/iframe all react correctly, then verifying the default (no URL) state also reverts to the honest UNAVAILABLE presentation."
+}
