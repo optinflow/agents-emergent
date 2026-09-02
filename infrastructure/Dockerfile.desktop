@@ -1,0 +1,7 @@
+FROM lscr.io/linuxserver/webtop:ubuntu-xfce
+
+LABEL description="Portable Personal AI Computer - Ubuntu XFCE desktop (KasmVNC)"
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git curl ca-certificates openssh-client && \
+    rm -rf /var/lib/apt/lists/*

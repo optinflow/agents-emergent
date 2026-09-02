@@ -1,0 +1,64 @@
+services:
+  desktop:
+    build:
+      context: ..
+      dockerfile: infrastructure/Dockerfile.desktop
+    container_name: ${DESKTOP_CONTAINER_NAME:-personal-ai-desktop}
+    security_opt:
+      - seccomp:unconfined
+    shm_size: "1gb"
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-UTC}
+      - TITLE=Personal AI Computer
+    volumes:
+      - ../data/home:/config
+    ports:
+      - "${DESKTOP_PORT:-3010}:3000"
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    container_name: ${MONGO_CONTAINER_NAME:-personal-ai-mongo}
+    volumes:
+      - ../data/mongo:/data/db
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../backend
+    container_name: ${BACKEND_CONTAINER_NAME:-personal-ai-backend}
+    environment:
+      - MONGO_URL=mongodb://mongo:27017
+      - DB_NAME=${DB_NAME:-personal_ai_dashboard}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - DESKTOP_CONTAINER_NAME=${DESKTOP_CONTAINER_NAME:-personal-ai-desktop}
+      - DESKTOP_URL=${DESKTOP_URL:-http://localhost:3010}
+      - DATA_DIR=/data
+      - BACKUP_DIR=/data/backups
+      - GIT_REPO_DIR=/repo
+      - GIT_BRANCH=${GIT_BRANCH:-main}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GITHUB_REPO_URL=${GITHUB_REPO_URL:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../data:/data
+      - ..:/repo
+    depends_on:
+      - mongo
+    ports:
+      - "${BACKEND_PORT:-8001}:8001"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+    container_name: ${FRONTEND_CONTAINER_NAME:-personal-ai-frontend}
+    environment:
+      - REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL:-http://localhost:8001}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
