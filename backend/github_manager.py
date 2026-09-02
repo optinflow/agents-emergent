@@ -70,6 +70,13 @@ class GitHubManager:
                 result.append({"sha": parts[0], "author": parts[1], "date": parts[2], "message": parts[3]})
         return result
 
+    def _ensure_remote(self):
+        try:
+            self._run("remote", "get-url", "origin")
+            self._run("remote", "set-url", "origin", self.remote_url)
+        except RuntimeError:
+            self._run("remote", "add", "origin", self.remote_url)
+
     def push(self, commit_message=None):
         if not self.is_configured():
             raise RuntimeError("GitHub not configured: set GITHUB_TOKEN and GITHUB_REPO_URL in backend/.env")
@@ -77,13 +84,13 @@ class GitHubManager:
         if porcelain:
             self._run("add", "-A")
             self._run("commit", "-m", commit_message or "chore: dashboard auto-sync")
-        self._run("remote", "set-url", "origin", self.remote_url)
-        return self._run("push", "origin", f"HEAD:{self.branch}")
+        self._ensure_remote()
+        return self._run("push", "-u", "origin", f"HEAD:{self.branch}")
 
     def pull(self):
         if not self.is_configured():
             raise RuntimeError("GitHub not configured: set GITHUB_TOKEN and GITHUB_REPO_URL in backend/.env")
-        self._run("remote", "set-url", "origin", self.remote_url)
+        self._ensure_remote()
         return self._run("pull", "--rebase", "origin", self.branch)
 
     def sync(self):
